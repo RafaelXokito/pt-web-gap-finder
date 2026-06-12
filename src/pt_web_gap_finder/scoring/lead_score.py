@@ -17,7 +17,7 @@ def score_lead(lead: CompanyLead) -> LeadScores:
     analysis = lead.website_analysis
     if analysis:
         if analysis.reachable is False:
-            score += 40
+            score += 55
             reasons.append("Website is unreachable")
         if analysis.https is False:
             score += 20

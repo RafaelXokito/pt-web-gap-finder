@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -7,9 +9,11 @@ import typer
 from rich.console import Console
 
 from pt_web_gap_finder import __version__
+from pt_web_gap_finder.models import CompanyLead, OnlinePresence
 from pt_web_gap_finder.output.csv_export import write_leads_csv
 from pt_web_gap_finder.output.json_export import write_evidence_jsonl, write_leads_json
 from pt_web_gap_finder.pipeline import run_scan
+from pt_web_gap_finder.site_analysis import run_site_analysis_sync
 from pt_web_gap_finder.sources.base import SourceQuery
 
 app = typer.Typer(
@@ -85,14 +89,49 @@ def _parse_bbox(value: str | None) -> tuple[float, float, float, float]:
 @app.command("analyze-sites")
 def analyze_sites(
     input: Path = typer.Option(..., "--input", help="Input CSV/JSON lead file."),
-    output: Path = typer.Option(..., help="Output enriched lead file."),
+    output: Path = typer.Option(..., help="Output enriched JSON lead file."),
+    csv_output: Optional[Path] = typer.Option(None, help="Optional enriched CSV output path."),
+    evidence_output: Optional[Path] = typer.Option(None, help="Optional evidence JSONL output path."),
     timeout: float = typer.Option(10.0, help="HTTP timeout seconds."),
-    concurrency: int = typer.Option(5, help="Maximum concurrent site checks."),
+    concurrency: int = typer.Option(5, min=1, help="Maximum concurrent site checks."),
 ) -> None:
     """Analyze website reachability and basic quality signals."""
-    console.print("[yellow]analyze-sites is not implemented yet.[/yellow]")
-    console.print({"input": str(input), "output": str(output), "timeout": timeout, "concurrency": concurrency})
-    raise typer.Exit(code=2)
+    leads = _read_leads(input)
+    analyzed = run_site_analysis_sync(leads, timeout=timeout, concurrency=concurrency)
+    write_leads_json(analyzed, output)
+    if csv_output:
+        write_leads_csv(analyzed, csv_output)
+    if evidence_output:
+        write_evidence_jsonl(analyzed, evidence_output)
+    console.print(f"[green]Analyzed {len(analyzed)} leads[/green] to {output}")
+
+
+def _read_leads(input_path: Path) -> list[CompanyLead]:
+    if input_path.suffix.lower() == ".json":
+        data = json.loads(input_path.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            raise typer.BadParameter("JSON input must contain a list of leads")
+        return [CompanyLead.model_validate(item) for item in data]
+    if input_path.suffix.lower() == ".csv":
+        with input_path.open(newline="", encoding="utf-8") as handle:
+            return [_lead_from_csv_row(row) for row in csv.DictReader(handle)]
+    raise typer.BadParameter("input must be a .json or .csv lead export")
+
+
+def _lead_from_csv_row(row: dict[str, str]) -> CompanyLead:
+    website_url = row.get("website_url") or None
+    website_found_raw = (row.get("website_found") or "").strip().lower()
+    website_found = None
+    if website_found_raw in {"true", "1", "yes"}:
+        website_found = True
+    elif website_found_raw in {"false", "0", "no"}:
+        website_found = False
+    return CompanyLead(
+        id=row.get("id") or row.get("name") or "csv:unknown",
+        name=row.get("name") or "",
+        category=row.get("category") or None,
+        online_presence=OnlinePresence(website_found=website_found, website_url=website_url),
+    )
 
 
 @app.command()
