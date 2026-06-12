@@ -81,6 +81,54 @@ def test_run_command_scans_analyzes_and_writes_all_outputs(tmp_path, monkeypatch
     assert "Empresa Pipeline" in (output_dir / "report.md").read_text(encoding="utf-8")
 
 
+def test_run_command_expands_category_bundle_and_deduplicates_outputs(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run_scan(query):
+        calls.append(query.category)
+        return [
+            CompanyLead(
+                id="shared:1",
+                name=f"Shared {query.category}",
+                category=query.category,
+                online_presence=OnlinePresence(website_found=False),
+            ),
+            CompanyLead(
+                id=f"unique:{query.category}",
+                name=f"Unique {query.category}",
+                category=query.category,
+                online_presence=OnlinePresence(website_found=False),
+            ),
+        ]
+
+    def fake_run_site_analysis(leads, timeout, concurrency):
+        return leads
+
+    monkeypatch.setattr(cli_module, "run_scan", fake_run_scan)
+    monkeypatch.setattr(cli_module, "run_site_analysis_sync", fake_run_site_analysis)
+
+    output_dir = tmp_path / "restaurants-run"
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--place",
+            "porto",
+            "--category",
+            "restaurants",
+            "--limit",
+            "3",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls == ["restaurant", "cafe", "bar", "fast_food"]
+    analyzed = json.loads((output_dir / "analyzed.json").read_text(encoding="utf-8"))
+    assert [lead["id"] for lead in analyzed] == ["shared:1", "unique:restaurant", "unique:cafe"]
+
+
 def test_run_command_accepts_place_preset(tmp_path, monkeypatch):
     scanned = CompanyLead(
         id="osm:node:2",

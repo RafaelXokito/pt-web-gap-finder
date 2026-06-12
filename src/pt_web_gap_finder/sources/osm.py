@@ -13,10 +13,16 @@ from pt_web_gap_finder.sources.base import SourceQuery
 CATEGORY_FILTERS: dict[str, list[tuple[str, str]]] = {
     "restaurant": [("amenity", "restaurant")],
     "cafe": [("amenity", "cafe")],
+    "bar": [("amenity", "bar"), ("amenity", "pub")],
+    "fast_food": [("amenity", "fast_food")],
     "dentist": [("amenity", "dentist"), ("healthcare", "dentist")],
+    "pharmacy": [("amenity", "pharmacy"), ("healthcare", "pharmacy")],
+    "clinic": [("amenity", "clinic"), ("healthcare", "clinic")],
     "hairdresser": [("shop", "hairdresser")],
     "real_estate": [("office", "estate_agent")],
     "gym": [("leisure", "fitness_centre")],
+    "bakery": [("shop", "bakery")],
+    "car_repair": [("shop", "car_repair")],
 }
 
 OSM_SOURCE_NAME = "OpenStreetMap"

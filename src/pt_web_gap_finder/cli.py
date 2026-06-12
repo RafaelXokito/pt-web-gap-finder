@@ -9,6 +9,7 @@ import typer
 from rich.console import Console
 
 from pt_web_gap_finder import __version__
+from pt_web_gap_finder.categories import CategoryNotFoundError, resolve_categories
 from pt_web_gap_finder.models import CompanyLead, OnlinePresence
 from pt_web_gap_finder.output.csv_export import write_leads_csv
 from pt_web_gap_finder.output.json_export import write_evidence_jsonl, write_leads_json
@@ -59,15 +60,14 @@ def scan(
     parsed_bbox, municipality, district = _resolve_location(
         bbox=bbox, place=place, municipality=municipality, district=district
     )
-    query = SourceQuery(
-        country=country,
+    leads = _run_scan_for_categories(
         category=category,
+        country=country,
         municipality=municipality,
         district=district,
         bbox=parsed_bbox,
         limit=limit,
     )
-    leads = run_scan(query)
     write_leads_csv(leads, output)
     if json_output:
         write_leads_json(leads, json_output)
@@ -109,6 +109,45 @@ def _resolve_location(
     return _parse_bbox(bbox), municipality, district
 
 
+def _run_scan_for_categories(
+    *,
+    category: str,
+    country: str,
+    municipality: str | None,
+    district: str | None,
+    bbox: tuple[float, float, float, float],
+    limit: int,
+) -> list[CompanyLead]:
+    try:
+        categories = resolve_categories(category)
+    except CategoryNotFoundError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    category_results: list[list[CompanyLead]] = []
+    for resolved_category in categories:
+        query = SourceQuery(
+            country=country,
+            category=resolved_category,
+            municipality=municipality,
+            district=district,
+            bbox=bbox,
+            limit=limit,
+        )
+        category_results.append(run_scan(query))
+
+    leads_by_id: dict[str, CompanyLead] = {}
+    max_result_count = max((len(results) for results in category_results), default=0)
+    for index in range(max_result_count):
+        for results in category_results:
+            if index >= len(results):
+                continue
+            lead = results[index]
+            leads_by_id.setdefault(lead.id, lead)
+            if len(leads_by_id) >= limit:
+                return list(leads_by_id.values())
+    return list(leads_by_id.values())
+
+
 @app.command()
 def run(
     category: str = typer.Option(..., help="Business category, e.g. restaurant, dentist."),
@@ -137,16 +176,15 @@ def run(
         bbox=bbox, place=place, municipality=municipality, district=district
     )
     output_dir.mkdir(parents=True, exist_ok=True)
-    query = SourceQuery(
-        country=country,
+    leads = _run_scan_for_categories(
         category=category,
+        country=country,
         municipality=municipality,
         district=district,
         bbox=parsed_bbox,
         limit=limit,
     )
 
-    leads = run_scan(query)
     write_leads_csv(leads, output_dir / "leads.csv")
     write_leads_json(leads, output_dir / "leads.json")
     write_evidence_jsonl(leads, output_dir / "evidence.jsonl")

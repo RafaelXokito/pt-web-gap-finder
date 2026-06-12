@@ -85,6 +85,48 @@ def test_scan_accepts_place_preset_instead_of_manual_bbox(tmp_path, monkeypatch)
     assert csv_path.exists()
 
 
+def test_scan_accepts_category_bundle(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run_scan(query):
+        calls.append(query.category)
+        return [
+            CompanyLead(
+                id=f"osm:{query.category}",
+                name=f"Lead {query.category}",
+                category=query.category,
+                online_presence=OnlinePresence(website_found=False),
+            )
+        ]
+
+    monkeypatch.setattr(cli_module, "run_scan", fake_run_scan)
+    csv_path = tmp_path / "leads.csv"
+    json_path = tmp_path / "leads.json"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "scan",
+            "--place",
+            "porto",
+            "--category",
+            "restaurants",
+            "--limit",
+            "2",
+            "--output",
+            str(csv_path),
+            "--json-output",
+            str(json_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls == ["restaurant", "cafe", "bar", "fast_food"]
+    assert "Lead restaurant" in csv_path.read_text(encoding="utf-8")
+    assert "Lead cafe" in csv_path.read_text(encoding="utf-8")
+    assert "Lead bar" not in csv_path.read_text(encoding="utf-8")
+
+
 def test_scan_rejects_malformed_bbox():
     result = CliRunner().invoke(
         app,
