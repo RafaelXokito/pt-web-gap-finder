@@ -13,6 +13,7 @@ from pt_web_gap_finder.models import CompanyLead, OnlinePresence
 from pt_web_gap_finder.output.csv_export import write_leads_csv
 from pt_web_gap_finder.output.json_export import write_evidence_jsonl, write_leads_json
 from pt_web_gap_finder.pipeline import run_scan
+from pt_web_gap_finder.report import write_markdown_report
 from pt_web_gap_finder.site_analysis import run_site_analysis_sync
 from pt_web_gap_finder.sources.base import SourceQuery
 
@@ -142,9 +143,11 @@ def report(
     format: str = typer.Option("markdown", help="Report format. MVP: markdown."),
 ) -> None:
     """Generate a prospecting report."""
-    console.print("[yellow]report is not implemented yet.[/yellow]")
-    console.print({"input": str(input), "output": str(output), "top": top, "format": format})
-    raise typer.Exit(code=2)
+    if format != "markdown":
+        raise typer.BadParameter("MVP currently supports markdown format only")
+    leads = _read_leads(input)
+    write_markdown_report(leads, output, top=top)
+    console.print(f"[green]Wrote report[/green] with {min(len(leads), top)} leads to {output}")
 
 
 @sources_app.command("list")
