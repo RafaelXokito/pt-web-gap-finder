@@ -87,6 +87,54 @@ def _parse_bbox(value: str | None) -> tuple[float, float, float, float]:
     return min_lon, min_lat, max_lon, max_lat
 
 
+@app.command()
+def run(
+    category: str = typer.Option(..., help="Business category, e.g. restaurant, dentist."),
+    country: str = typer.Option("PT", help="Country code. MVP supports PT."),
+    municipality: Optional[str] = typer.Option(None, help="Portuguese municipality/concelho."),
+    district: Optional[str] = typer.Option(None, help="Portuguese district."),
+    bbox: Optional[str] = typer.Option(None, help="min_lon,min_lat,max_lon,max_lat."),
+    source: str = typer.Option("osm", help="Source adapter. MVP: osm."),
+    limit: int = typer.Option(100, min=1, help="Maximum records."),
+    output_dir: Path = typer.Option(Path("outputs/run"), help="Directory for all pipeline outputs."),
+    timeout: float = typer.Option(10.0, help="HTTP timeout seconds for website analysis."),
+    concurrency: int = typer.Option(5, min=1, help="Maximum concurrent site checks."),
+    top: int = typer.Option(50, min=1, help="Top lead count for report."),
+    format: str = typer.Option("markdown", help="Report format. MVP: markdown."),
+) -> None:
+    """Run scan, website analysis, and report generation in one command."""
+    if country != "PT":
+        raise typer.BadParameter("MVP currently supports country PT only")
+    if source != "osm":
+        raise typer.BadParameter("MVP currently supports source osm only")
+    if format != "markdown":
+        raise typer.BadParameter("MVP currently supports markdown format only")
+
+    parsed_bbox = _parse_bbox(bbox)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    query = SourceQuery(
+        country=country,
+        category=category,
+        municipality=municipality,
+        district=district,
+        bbox=parsed_bbox,
+        limit=limit,
+    )
+
+    leads = run_scan(query)
+    write_leads_csv(leads, output_dir / "leads.csv")
+    write_leads_json(leads, output_dir / "leads.json")
+    write_evidence_jsonl(leads, output_dir / "evidence.jsonl")
+
+    analyzed = run_site_analysis_sync(leads, timeout=timeout, concurrency=concurrency)
+    write_leads_csv(analyzed, output_dir / "analyzed.csv")
+    write_leads_json(analyzed, output_dir / "analyzed.json")
+    write_evidence_jsonl(analyzed, output_dir / "analyzed-evidence.jsonl")
+    write_markdown_report(analyzed, output_dir / "report.md", top=top)
+
+    console.print(f"[green]Completed pipeline[/green] for {len(analyzed)} leads in {output_dir}")
+
+
 @app.command("analyze-sites")
 def analyze_sites(
     input: Path = typer.Option(..., "--input", help="Input CSV/JSON lead file."),
