@@ -16,6 +16,7 @@ from pt_web_gap_finder.output.json_export import write_evidence_jsonl, write_lea
 from pt_web_gap_finder.pipeline import run_scan
 from pt_web_gap_finder.places import PlaceNotFoundError, resolve_place
 from pt_web_gap_finder.report import write_markdown_report
+from pt_web_gap_finder.search_verification import run_search_verification_sync
 from pt_web_gap_finder.site_analysis import run_site_analysis_sync
 from pt_web_gap_finder.sources.base import SourceQuery
 
@@ -163,6 +164,9 @@ def run(
     concurrency: int = typer.Option(5, min=1, help="Maximum concurrent site checks."),
     top: int = typer.Option(50, min=1, help="Top lead count for report."),
     format: str = typer.Option("markdown", help="Report format. MVP: markdown."),
+    verify_search: bool = typer.Option(False, help="Verify missing websites using search before site analysis."),
+    search_provider: str = typer.Option("bing", help="Search provider for verification. MVP: bing."),
+    search_limit: int = typer.Option(5, min=1, max=10, help="Max search results to inspect per lead."),
 ) -> None:
     """Run scan, website analysis, and report generation in one command."""
     if country != "PT":
@@ -171,6 +175,8 @@ def run(
         raise typer.BadParameter("MVP currently supports source osm only")
     if format != "markdown":
         raise typer.BadParameter("MVP currently supports markdown format only")
+    if verify_search and search_provider != "bing":
+        raise typer.BadParameter("MVP currently supports search provider bing only")
 
     parsed_bbox, municipality, district = _resolve_location(
         bbox=bbox, place=place, municipality=municipality, district=district
@@ -189,6 +195,9 @@ def run(
     write_leads_json(leads, output_dir / "leads.json")
     write_evidence_jsonl(leads, output_dir / "evidence.jsonl")
 
+    if verify_search:
+        leads = run_search_verification_sync(leads, provider=search_provider, limit=search_limit)
+
     analyzed = run_site_analysis_sync(leads, timeout=timeout, concurrency=concurrency)
     write_leads_csv(analyzed, output_dir / "analyzed.csv")
     write_leads_json(analyzed, output_dir / "analyzed.json")
@@ -206,9 +215,16 @@ def analyze_sites(
     evidence_output: Optional[Path] = typer.Option(None, help="Optional evidence JSONL output path."),
     timeout: float = typer.Option(10.0, help="HTTP timeout seconds."),
     concurrency: int = typer.Option(5, min=1, help="Maximum concurrent site checks."),
+    verify_search: bool = typer.Option(False, help="Verify missing websites using search before site analysis."),
+    search_provider: str = typer.Option("bing", help="Search provider for verification. MVP: bing."),
+    search_limit: int = typer.Option(5, min=1, max=10, help="Max search results to inspect per lead."),
 ) -> None:
     """Analyze website reachability and basic quality signals."""
+    if verify_search and search_provider != "bing":
+        raise typer.BadParameter("MVP currently supports search provider bing only")
     leads = _read_leads(input)
+    if verify_search:
+        leads = run_search_verification_sync(leads, provider=search_provider, limit=search_limit)
     analyzed = run_site_analysis_sync(leads, timeout=timeout, concurrency=concurrency)
     write_leads_json(analyzed, output)
     if csv_output:

@@ -7,6 +7,59 @@ from pt_web_gap_finder.cli import app
 from pt_web_gap_finder.models import CompanyLead, OnlinePresence, WebsiteAnalysis
 
 
+def test_run_command_can_verify_search_before_analysis(tmp_path, monkeypatch):
+    scanned = CompanyLead(
+        id="osm:node:verify-run",
+        name="Barbearia Sousa",
+        category="hairdresser",
+        online_presence=OnlinePresence(website_found=False),
+    )
+
+    def fake_run_scan(query):
+        return [scanned]
+
+    def fake_verify(leads, provider, limit):
+        assert provider == "bing"
+        assert limit == 4
+        leads[0].online_presence.website_found = True
+        leads[0].online_presence.website_url = "https://barbeariasousa.pt"
+        leads[0].online_presence.website_discovery_method = "bing_search"
+        return leads
+
+    def fake_run_site_analysis(leads, timeout, concurrency):
+        assert leads[0].online_presence.website_url == "https://barbeariasousa.pt"
+        return leads
+
+    monkeypatch.setattr(cli_module, "run_scan", fake_run_scan)
+    monkeypatch.setattr(cli_module, "run_search_verification_sync", fake_verify)
+    monkeypatch.setattr(cli_module, "run_site_analysis_sync", fake_run_site_analysis)
+
+    output_dir = tmp_path / "run-output"
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--bbox",
+            "-8.75,41.05,-8.45,41.25",
+            "--category",
+            "hairdresser",
+            "--limit",
+            "1",
+            "--output-dir",
+            str(output_dir),
+            "--verify-search",
+            "--search-provider",
+            "bing",
+            "--search-limit",
+            "4",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    analyzed = json.loads((output_dir / "analyzed.json").read_text(encoding="utf-8"))
+    assert analyzed[0]["online_presence"]["website_url"] == "https://barbeariasousa.pt"
+
+
 def test_run_command_scans_analyzes_and_writes_all_outputs(tmp_path, monkeypatch):
     scanned = CompanyLead(
         id="osm:node:1",

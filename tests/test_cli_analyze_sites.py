@@ -7,6 +7,52 @@ from pt_web_gap_finder.cli import app
 from pt_web_gap_finder.models import CompanyLead, OnlinePresence, WebsiteAnalysis
 
 
+def test_analyze_sites_can_verify_search_discovery_before_site_analysis(tmp_path, monkeypatch):
+    input_path = tmp_path / "leads.json"
+    json_output = tmp_path / "analyzed.json"
+    lead = CompanyLead(
+        id="osm:node:verify",
+        name="Barbearia Sousa",
+        online_presence=OnlinePresence(website_found=False),
+    )
+    input_path.write_text(json.dumps([lead.model_dump(mode="json")]), encoding="utf-8")
+
+    def fake_verify(leads, provider, limit):
+        assert provider == "bing"
+        assert limit == 3
+        leads[0].online_presence.website_found = True
+        leads[0].online_presence.website_url = "https://barbeariasousa.pt"
+        leads[0].online_presence.website_discovery_method = "bing_search"
+        return leads
+
+    def fake_run_site_analysis(leads, timeout, concurrency):
+        assert leads[0].online_presence.website_url == "https://barbeariasousa.pt"
+        return leads
+
+    monkeypatch.setattr(cli_module, "run_search_verification_sync", fake_verify)
+    monkeypatch.setattr(cli_module, "run_site_analysis_sync", fake_run_site_analysis)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "analyze-sites",
+            "--input",
+            str(input_path),
+            "--output",
+            str(json_output),
+            "--verify-search",
+            "--search-provider",
+            "bing",
+            "--search-limit",
+            "3",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(json_output.read_text(encoding="utf-8"))
+    assert data[0]["online_presence"]["website_url"] == "https://barbeariasousa.pt"
+
+
 def test_analyze_sites_reads_json_and_writes_enriched_json_csv_and_evidence(tmp_path, monkeypatch):
     input_path = tmp_path / "leads.json"
     json_output = tmp_path / "analyzed.json"
