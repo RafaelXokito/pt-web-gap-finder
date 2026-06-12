@@ -81,6 +81,44 @@ def test_run_command_scans_analyzes_and_writes_all_outputs(tmp_path, monkeypatch
     assert "Empresa Pipeline" in (output_dir / "report.md").read_text(encoding="utf-8")
 
 
+def test_run_command_accepts_place_preset(tmp_path, monkeypatch):
+    scanned = CompanyLead(
+        id="osm:node:2",
+        name="Empresa Lisboa",
+        category="dentist",
+        online_presence=OnlinePresence(website_found=False),
+    )
+
+    def fake_run_scan(query):
+        assert query.bbox == (-9.23, 38.68, -9.09, 38.8)
+        assert query.municipality == "Lisboa"
+        assert query.category == "dentist"
+        return [scanned]
+
+    def fake_run_site_analysis(leads, timeout, concurrency):
+        return leads
+
+    monkeypatch.setattr(cli_module, "run_scan", fake_run_scan)
+    monkeypatch.setattr(cli_module, "run_site_analysis_sync", fake_run_site_analysis)
+
+    output_dir = tmp_path / "lisboa-run"
+    result = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--place",
+            "lisboa",
+            "--category",
+            "dentist",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (output_dir / "report.md").exists()
+
+
 def test_run_command_rejects_unsupported_format(tmp_path):
     result = CliRunner().invoke(
         app,

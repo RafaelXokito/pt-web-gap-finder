@@ -52,6 +52,39 @@ def test_scan_writes_csv_json_and_evidence_outputs(tmp_path, monkeypatch):
     assert evidence_path.exists()
 
 
+def test_scan_accepts_place_preset_instead_of_manual_bbox(tmp_path, monkeypatch):
+    lead = CompanyLead(
+        id="osm:node:1",
+        name="Restaurante Porto",
+        category="restaurant",
+        online_presence=OnlinePresence(website_found=False),
+    )
+
+    def fake_run_scan(query):
+        assert query.bbox == (-8.69, 41.12, -8.55, 41.19)
+        assert query.municipality == "Porto"
+        return [lead]
+
+    monkeypatch.setattr(cli_module, "run_scan", fake_run_scan)
+    csv_path = tmp_path / "leads.csv"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "scan",
+            "--place",
+            "porto",
+            "--category",
+            "restaurant",
+            "--output",
+            str(csv_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert csv_path.exists()
+
+
 def test_scan_rejects_malformed_bbox():
     result = CliRunner().invoke(
         app,

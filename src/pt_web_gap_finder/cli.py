@@ -13,6 +13,7 @@ from pt_web_gap_finder.models import CompanyLead, OnlinePresence
 from pt_web_gap_finder.output.csv_export import write_leads_csv
 from pt_web_gap_finder.output.json_export import write_evidence_jsonl, write_leads_json
 from pt_web_gap_finder.pipeline import run_scan
+from pt_web_gap_finder.places import PlaceNotFoundError, resolve_place
 from pt_web_gap_finder.report import write_markdown_report
 from pt_web_gap_finder.site_analysis import run_site_analysis_sync
 from pt_web_gap_finder.sources.base import SourceQuery
@@ -42,6 +43,7 @@ def scan(
     municipality: Optional[str] = typer.Option(None, help="Portuguese municipality/concelho."),
     district: Optional[str] = typer.Option(None, help="Portuguese district."),
     bbox: Optional[str] = typer.Option(None, help="min_lon,min_lat,max_lon,max_lat."),
+    place: Optional[str] = typer.Option(None, help="Portugal place preset, e.g. porto, lisboa."),
     source: str = typer.Option("osm", help="Source adapter. MVP: osm."),
     limit: int = typer.Option(100, min=1, help="Maximum records."),
     output: Path = typer.Option(Path("outputs/leads.csv"), help="CSV output path."),
@@ -54,7 +56,9 @@ def scan(
     if source != "osm":
         raise typer.BadParameter("MVP currently supports source osm only")
 
-    parsed_bbox = _parse_bbox(bbox)
+    parsed_bbox, municipality, district = _resolve_location(
+        bbox=bbox, place=place, municipality=municipality, district=district
+    )
     query = SourceQuery(
         country=country,
         category=category,
@@ -87,6 +91,24 @@ def _parse_bbox(value: str | None) -> tuple[float, float, float, float]:
     return min_lon, min_lat, max_lon, max_lat
 
 
+def _resolve_location(
+    *,
+    bbox: str | None,
+    place: str | None,
+    municipality: str | None,
+    district: str | None,
+) -> tuple[tuple[float, float, float, float], str | None, str | None]:
+    if bbox and place:
+        raise typer.BadParameter("use either bbox or place, not both")
+    if place:
+        try:
+            preset = resolve_place(place)
+        except PlaceNotFoundError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        return preset.bbox, municipality or preset.municipality, district or preset.district
+    return _parse_bbox(bbox), municipality, district
+
+
 @app.command()
 def run(
     category: str = typer.Option(..., help="Business category, e.g. restaurant, dentist."),
@@ -94,6 +116,7 @@ def run(
     municipality: Optional[str] = typer.Option(None, help="Portuguese municipality/concelho."),
     district: Optional[str] = typer.Option(None, help="Portuguese district."),
     bbox: Optional[str] = typer.Option(None, help="min_lon,min_lat,max_lon,max_lat."),
+    place: Optional[str] = typer.Option(None, help="Portugal place preset, e.g. porto, lisboa."),
     source: str = typer.Option("osm", help="Source adapter. MVP: osm."),
     limit: int = typer.Option(100, min=1, help="Maximum records."),
     output_dir: Path = typer.Option(Path("outputs/run"), help="Directory for all pipeline outputs."),
@@ -110,7 +133,9 @@ def run(
     if format != "markdown":
         raise typer.BadParameter("MVP currently supports markdown format only")
 
-    parsed_bbox = _parse_bbox(bbox)
+    parsed_bbox, municipality, district = _resolve_location(
+        bbox=bbox, place=place, municipality=municipality, district=district
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     query = SourceQuery(
         country=country,
