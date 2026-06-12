@@ -16,8 +16,11 @@ def score_lead(lead: CompanyLead) -> LeadScores:
 
     analysis = lead.website_analysis
     if analysis:
-        if analysis.reachable is False:
-            score += 40
+        manual_review_required = "Browser/bot-protection challenge detected" in analysis.notes
+        if manual_review_required:
+            reasons.append("Automated fetch hit browser/bot-protection challenge; manual review required")
+        elif analysis.reachable is False:
+            score += 55
             reasons.append("Website is unreachable")
         if analysis.https is False:
             score += 20
@@ -28,7 +31,7 @@ def score_lead(lead: CompanyLead) -> LeadScores:
         if analysis.meta_description_present is False:
             score += 5
             reasons.append("No meta description detected")
-        if not analysis.contact_signals:
+        if not manual_review_required and not analysis.contact_signals:
             score += 10
             reasons.append("No contact signal detected on homepage")
 

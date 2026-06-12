@@ -2,45 +2,292 @@
 
 Portugal-focused company prospecting and website-gap analysis CLI.
 
-The project finds Portuguese businesses from public/open/official sources, enriches them with evidence-backed contact and online-presence data, checks whether they have no website or a weak website, and exports prioritized lead lists for website creation/redesign outreach.
+The project finds Portuguese businesses from public/open sources, enriches them with evidence-backed contact and online-presence data, checks whether they have no website or a weak website, and exports prioritized lead lists for website creation/redesign outreach.
 
-## Current status
+## What it does
 
-Early design + skeleton. The first MVP targets:
+The current MVP can run an end-to-end prospecting workflow:
 
-- Source: OpenStreetMap Overpass API
-- Region filter: Portugal municipality/district/bounding box
-- Category filter: local business verticals
-- Enrichment: website discovery and basic website health checks
-- Output: CSV, JSON, Markdown report, evidence ledger
+```text
+scan businesses → analyze websites → rank opportunities → write report
+```
+
+It currently uses OpenStreetMap / Overpass as the first discovery source and keeps provenance artifacts beside the exported leads.
+
+## Quickstart
+
+### 1. Install locally
+
+From the repo root:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -e '.[dev]'
+```
+
+If your system Python is externally managed, keep using the virtualenv commands above rather than installing into the system environment.
+
+If pip reports a cache/download decoding error, retry without the local package cache:
+
+```bash
+python -m pip cache purge
+PIP_NO_CACHE_DIR=1 python -m pip install -e '.[dev]'
+```
+
+### 2. Run a complete campaign
+
+Use `run` for the full one-command workflow:
+
+```bash
+pt-web-gap-finder run \
+  --place porto \
+  --category restaurants \
+  --limit 25 \
+  --output-dir outputs/porto-restaurants
+```
+
+This writes:
+
+```text
+outputs/porto-restaurants/
+  leads.csv
+  leads.json
+  evidence.jsonl
+  analyzed.csv
+  analyzed.json
+  analyzed-evidence.jsonl
+  report.md
+```
+
+Open `report.md` first. Use the CSV/JSON files for spreadsheet or CRM imports, and use the evidence ledgers to inspect provenance.
+
+## Common campaign examples
+
+```bash
+# Restaurants, cafes, bars, and fast food in Porto
+pt-web-gap-finder run --place porto --category restaurants --limit 50 --output-dir outputs/porto-restaurants
+
+# Health-related local businesses in Lisbon
+pt-web-gap-finder run --place lisboa --category health --limit 50 --output-dir outputs/lisboa-health
+
+# Local services in Braga
+pt-web-gap-finder run --place braga --category local-services --limit 50 --output-dir outputs/braga-local-services
+
+# Food and drink businesses in Coimbra
+pt-web-gap-finder run --place coimbra --category food-drink --limit 50 --output-dir outputs/coimbra-food-drink
+```
+
+## Places
+
+You can use `--place` instead of manually typing bbox coordinates.
+
+Initial Portugal presets:
+
+- `porto`
+- `lisboa`
+- `braga`
+- `coimbra`
+- `faro`
+
+Useful aliases include:
+
+- `oporto`
+- `lisbon`
+- `porto-centro`
+- `lisboa-centro`
+- `braga-centro`
+- `coimbra-centro`
+- `faro-centro`
+
+Advanced users can still pass a manual bounding box:
+
+```bash
+pt-web-gap-finder run \
+  --bbox -8.69,41.12,-8.55,41.19 \
+  --category restaurant \
+  --limit 25 \
+  --output-dir outputs/custom-porto-bbox
+```
+
+Use either `--place` or `--bbox`, not both.
+
+## Categories and bundles
+
+Single categories:
+
+- `restaurant`
+- `cafe`
+- `bar`
+- `fast_food`
+- `dentist`
+- `pharmacy`
+- `clinic`
+- `hairdresser`
+- `real_estate`
+- `gym`
+- `bakery`
+- `car_repair`
+
+Campaign bundles:
+
+- `restaurants` → `restaurant`, `cafe`, `bar`, `fast_food`
+- `food-drink` → `restaurant`, `cafe`, `bar`, `fast_food`, `bakery`
+- `health` → `dentist`, `pharmacy`, `clinic`
+- `local-services` → `hairdresser`, `real_estate`, `gym`, `bakery`, `car_repair`
+
+Bundle runs execute multiple category scans, deduplicate leads, and merge results in a round-robin order so small limits still include multiple business types.
+
+## Individual commands
+
+Use these when you want to inspect each stage separately.
+
+### Scan businesses
+
+```bash
+pt-web-gap-finder scan \
+  --place porto \
+  --category restaurants \
+  --limit 25 \
+  --output outputs/scan/leads.csv \
+  --json-output outputs/scan/leads.json \
+  --evidence-output outputs/scan/evidence.jsonl
+```
+
+### Analyze websites
+
+```bash
+pt-web-gap-finder analyze-sites \
+  --input outputs/scan/leads.json \
+  --output outputs/scan/analyzed.json \
+  --csv-output outputs/scan/analyzed.csv \
+  --evidence-output outputs/scan/analyzed-evidence.jsonl
+```
+
+The analyzer checks homepage signals such as:
+
+- reachability
+- HTTP status
+- redirect/final URL
+- HTTPS usage
+- page title
+- meta description
+- mobile viewport tag
+- contact signals such as email, phone, and contact links
+
+### Generate a report
+
+```bash
+pt-web-gap-finder report \
+  --input outputs/scan/analyzed.json \
+  --output outputs/scan/report.md \
+  --top 25
+```
+
+The report groups and ranks opportunities by website gap, priority, evidence-backed reasons, and pitch angle.
+
+### Build a website starter package
+
+```bash
+pt-web-gap-finder build-site \
+  --input outputs/scan/analyzed.json \
+  --lead-id osm:node:123456789 \
+  --output-dir outputs/sites/example-business
+```
+
+This command creates an evidence-backed starter package for one lead:
+
+- `brief.md`: business snapshot, opportunity context, and confirmation checklist
+- `content.json`: grounded business facts for downstream design/code workflows
+- `index.html`: a starter landing page populated from the lead record
+- `styles.css`: polished default styling for the starter page
+- `hermes-redesign-prompt.md`: a ready prompt for a follow-up Hermes session using frontend/design skills such as `design-taste-frontend`, `gpt-taste`, and `image-to-code`
+
+### Build a ship-ready website package
+
+```bash
+pt-web-gap-finder ship-site \
+  --input outputs/scan/analyzed.json \
+  --lead-id osm:node:123456789 \
+  --output-dir outputs/ship-sites/example-business
+```
+
+This command creates a stronger handoff bundle designed to be publish-ready after one human confirmation pass:
+
+- `brief.md`: ship-ready brief and page narrative
+- `content.json`: evidence-backed business facts
+- `index.html` and `styles.css`: polished one-page site implementation
+- `design-plan.md`: design direction, AIDA check, and frontend-skill handoff
+- `design-analysis.md`: section-by-section rationale
+- `ship-checklist.md`: factual, legal, and technical final checks
+- `publish-ready-summary.md`: what is ready vs what still needs approval
+- `hermes-redesign-prompt.md`: follow-up prompt for a higher-end image-first redesign pass
+
+Important: this package is a **starter** for design and delivery workflows. It does not claim unverified services, pricing, hours, or branding details as final truth.
+
+## Output files
+
+- `leads.csv` / `leads.json`: discovered businesses before website analysis
+- `evidence.jsonl`: source evidence for discovered business facts
+- `analyzed.csv` / `analyzed.json`: leads after website quality analysis and rescoring
+- `analyzed-evidence.jsonl`: evidence after adding website-analysis findings
+- `report.md`: human-readable prospecting report
+
+## Interpreting results
+
+The tool is designed to help prioritize outreach, not to make absolute claims.
+
+Important caveat: a missing website tag in OpenStreetMap means “no website found in this source,” not “the company definitely has no website.” Use the evidence ledger and report reasons before contacting a business.
+
+Typical high-value opportunities are:
+
+- no website found in available evidence
+- broken or unreachable website
+- weak website signals, such as no HTTPS, no title, no mobile viewport, missing contact signals, or missing meta description
+- social-only presence without an owned website
+
+## Development
+
+Run tests and lint:
+
+```bash
+. .venv/bin/activate
+pytest -q
+ruff check .
+```
+
+Useful small smoke run:
+
+```bash
+pt-web-gap-finder run \
+  --place porto \
+  --category restaurants \
+  --limit 4 \
+  --output-dir outputs/smoke-porto-restaurants
+```
 
 ## Repository layout
 
 ```text
 pt-web-gap-finder/
   docs/
-    technical-specification.md
-    python-cli-plan.md
-    data-sources.md
   src/pt_web_gap_finder/
+    categories.py
     cli.py
     config.py
     models.py
-    sources/
-    enrichment/
-    scoring/
+    places.py
+    report.py
+    site_analysis.py
+    normalization/
     output/
+    scoring/
+    sources/
   tests/
-```
-
-## Planned CLI
-
-```bash
-pt-web-gap-finder scan --country PT --municipality Porto --category restaurant --limit 100 --output leads.csv
-pt-web-gap-finder analyze-sites --input leads.csv --output enriched.csv
-pt-web-gap-finder report --input enriched.csv --format markdown --output report.md
 ```
 
 ## Legal and ethical default
 
 This project is intended to use public/open/official sources and allowed APIs. It should not scrape restricted platforms, collect private personal contacts, or claim certainty where the evidence is incomplete.
+
+When using OpenStreetMap-derived data, respect the OpenStreetMap license and attribution requirements.
