@@ -50,6 +50,48 @@ def test_build_site_command_writes_site_starter_package(tmp_path, monkeypatch):
     assert "Built website starter package" in result.output
 
 
+def test_ship_site_command_writes_full_ship_ready_package(tmp_path, monkeypatch):
+    lead = CompanyLead(
+        id="osm:node:ship",
+        name="Auto Reparadora Brites",
+        category="car_repair",
+        online_presence=OnlinePresence(website_found=False),
+    )
+    input_path = tmp_path / "analyzed.json"
+    input_path.write_text(json.dumps([lead.model_dump(mode="json")]), encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    def fake_build_ship_ready_site_package(selected_lead, output_dir):
+        captured["lead_id"] = selected_lead.id
+        captured["output_dir"] = output_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / "publish-ready-summary.md"
+        path.write_text("Ready to ship", encoding="utf-8")
+        return [path]
+
+    monkeypatch.setattr(cli_module, "build_ship_ready_site_package", fake_build_ship_ready_site_package)
+
+    output_dir = tmp_path / "ship-package"
+    result = CliRunner().invoke(
+        app,
+        [
+            "ship-site",
+            "--input",
+            str(input_path),
+            "--lead-id",
+            "osm:node:ship",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured == {"lead_id": "osm:node:ship", "output_dir": Path(output_dir)}
+    assert (output_dir / "publish-ready-summary.md").exists()
+    assert "Built ship-ready website package" in result.output
+
+
 def test_run_command_can_verify_search_before_analysis(tmp_path, monkeypatch):
     scanned = CompanyLead(
         id="osm:node:verify-run",

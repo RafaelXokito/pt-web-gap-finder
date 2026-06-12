@@ -203,6 +203,26 @@ This command creates an evidence-backed starter package for one lead:
 - `styles.css`: polished default styling for the starter page
 - `hermes-redesign-prompt.md`: a ready prompt for a follow-up Hermes session using frontend/design skills such as `design-taste-frontend`, `gpt-taste`, and `image-to-code`
 
+### Build a ship-ready website package
+
+```bash
+pt-web-gap-finder ship-site \
+  --input outputs/scan/analyzed.json \
+  --lead-id osm:node:123456789 \
+  --output-dir outputs/ship-sites/example-business
+```
+
+This command creates a stronger handoff bundle designed to be publish-ready after one human confirmation pass:
+
+- `brief.md`: ship-ready brief and page narrative
+- `content.json`: evidence-backed business facts
+- `index.html` and `styles.css`: polished one-page site implementation
+- `design-plan.md`: design direction, AIDA check, and frontend-skill handoff
+- `design-analysis.md`: section-by-section rationale
+- `ship-checklist.md`: factual, legal, and technical final checks
+- `publish-ready-summary.md`: what is ready vs what still needs approval
+- `hermes-redesign-prompt.md`: follow-up prompt for a higher-end image-first redesign pass
+
 Important: this package is a **starter** for design and delivery workflows. It does not claim unverified services, pricing, hours, or branding details as final truth.
 
 ## Output files

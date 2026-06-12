@@ -18,7 +18,12 @@ from pt_web_gap_finder.places import PlaceNotFoundError, resolve_place
 from pt_web_gap_finder.report import write_markdown_report
 from pt_web_gap_finder.search_verification import run_search_verification_sync
 from pt_web_gap_finder.site_analysis import run_site_analysis_sync
-from pt_web_gap_finder.site_builder import build_site_package, default_site_output_dir, select_site_lead
+from pt_web_gap_finder.site_builder import (
+    build_ship_ready_site_package,
+    build_site_package,
+    default_site_output_dir,
+    select_site_lead,
+)
 from pt_web_gap_finder.sources.base import SourceQuery
 
 app = typer.Typer(
@@ -294,6 +299,25 @@ def build_site(
     written = build_site_package(selected, resolved_output_dir)
     console.print(
         f"[green]Built website starter package[/green] for {selected.name} in {resolved_output_dir} ({len(written)} files)"
+    )
+
+
+@app.command("ship-site")
+def ship_site(
+    input: Path = typer.Option(..., "--input", help="Input scored/analyzed lead JSON or CSV file."),
+    lead_id: Optional[str] = typer.Option(None, help="Specific lead id to build a ship-ready site for."),
+    output_dir: Optional[Path] = typer.Option(None, help="Output directory for the ship-ready website package."),
+) -> None:
+    """Generate a ship-ready website package for one lead."""
+    leads = _read_leads(input)
+    try:
+        selected = select_site_lead(leads, lead_id=lead_id)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    resolved_output_dir = output_dir or default_site_output_dir(Path("outputs/ship-sites"), selected)
+    written = build_ship_ready_site_package(selected, resolved_output_dir)
+    console.print(
+        f"[green]Built ship-ready website package[/green] for {selected.name} in {resolved_output_dir} ({len(written)} files)"
     )
 
 
