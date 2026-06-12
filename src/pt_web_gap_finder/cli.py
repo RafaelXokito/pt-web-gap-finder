@@ -18,6 +18,7 @@ from pt_web_gap_finder.places import PlaceNotFoundError, resolve_place
 from pt_web_gap_finder.report import write_markdown_report
 from pt_web_gap_finder.search_verification import run_search_verification_sync
 from pt_web_gap_finder.site_analysis import run_site_analysis_sync
+from pt_web_gap_finder.site_builder import build_site_package, default_site_output_dir, select_site_lead
 from pt_web_gap_finder.sources.base import SourceQuery
 
 app = typer.Typer(
@@ -275,6 +276,25 @@ def report(
     leads = _read_leads(input)
     write_markdown_report(leads, output, top=top)
     console.print(f"[green]Wrote report[/green] with {min(len(leads), top)} leads to {output}")
+
+
+@app.command()
+def build_site(
+    input: Path = typer.Option(..., "--input", help="Input scored/analyzed lead JSON or CSV file."),
+    lead_id: Optional[str] = typer.Option(None, help="Specific lead id to build a starter site for."),
+    output_dir: Optional[Path] = typer.Option(None, help="Output directory for the generated site starter package."),
+) -> None:
+    """Generate an evidence-backed starter website package for one lead."""
+    leads = _read_leads(input)
+    try:
+        selected = select_site_lead(leads, lead_id=lead_id)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    resolved_output_dir = output_dir or default_site_output_dir(Path("outputs/sites"), selected)
+    written = build_site_package(selected, resolved_output_dir)
+    console.print(
+        f"[green]Built website starter package[/green] for {selected.name} in {resolved_output_dir} ({len(written)} files)"
+    )
 
 
 @sources_app.command("list")

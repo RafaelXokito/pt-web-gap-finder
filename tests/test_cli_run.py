@@ -1,10 +1,53 @@
 import json
+from pathlib import Path
 
 from typer.testing import CliRunner
 
 import pt_web_gap_finder.cli as cli_module
 from pt_web_gap_finder.cli import app
 from pt_web_gap_finder.models import CompanyLead, OnlinePresence, WebsiteAnalysis
+
+
+def test_build_site_command_writes_site_starter_package(tmp_path, monkeypatch):
+    lead = CompanyLead(
+        id="osm:node:build",
+        name="Barbearia Sousa",
+        category="hairdresser",
+        online_presence=OnlinePresence(website_found=False),
+    )
+    input_path = tmp_path / "analyzed.json"
+    input_path.write_text(json.dumps([lead.model_dump(mode="json")]), encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    def fake_build_site_package(selected_lead, output_dir):
+        captured["lead_id"] = selected_lead.id
+        captured["output_dir"] = output_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / "index.html"
+        path.write_text("<html>ok</html>", encoding="utf-8")
+        return [path]
+
+    monkeypatch.setattr(cli_module, "build_site_package", fake_build_site_package)
+
+    output_dir = tmp_path / "site-package"
+    result = CliRunner().invoke(
+        app,
+        [
+            "build-site",
+            "--input",
+            str(input_path),
+            "--lead-id",
+            "osm:node:build",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured == {"lead_id": "osm:node:build", "output_dir": Path(output_dir)}
+    assert (output_dir / "index.html").exists()
+    assert "Built website starter package" in result.output
 
 
 def test_run_command_can_verify_search_before_analysis(tmp_path, monkeypatch):

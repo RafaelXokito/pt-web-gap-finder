@@ -186,6 +186,25 @@ pt-web-gap-finder report \
 
 The report groups and ranks opportunities by website gap, priority, evidence-backed reasons, and pitch angle.
 
+### Build a website starter package
+
+```bash
+pt-web-gap-finder build-site \
+  --input outputs/scan/analyzed.json \
+  --lead-id osm:node:123456789 \
+  --output-dir outputs/sites/example-business
+```
+
+This command creates an evidence-backed starter package for one lead:
+
+- `brief.md`: business snapshot, opportunity context, and confirmation checklist
+- `content.json`: grounded business facts for downstream design/code workflows
+- `index.html`: a starter landing page populated from the lead record
+- `styles.css`: polished default styling for the starter page
+- `hermes-redesign-prompt.md`: a ready prompt for a follow-up Hermes session using frontend/design skills such as `design-taste-frontend`, `gpt-taste`, and `image-to-code`
+
+Important: this package is a **starter** for design and delivery workflows. It does not claim unverified services, pricing, hours, or branding details as final truth.
+
 ## Output files
 
 - `leads.csv` / `leads.json`: discovered businesses before website analysis
