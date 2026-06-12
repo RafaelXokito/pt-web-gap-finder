@@ -72,6 +72,42 @@ def test_analyze_lead_site_marks_unreachable_site_as_warm_opportunity():
     assert "Website is unreachable" in analyzed.scores.reasons
 
 
+def test_browser_challenge_page_requires_manual_review_instead_of_warm_outreach():
+    lead = CompanyLead(
+        id="osm:node:4",
+        name="Barbearia Browser Check",
+        online_presence=OnlinePresence(website_found=True, website_url="https://barbearia.example"),
+    )
+    html = """
+    <html>
+      <head>
+        <title>Checking your browser before accessing. Just a moment...</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+      </head>
+      <body>Checking your browser before accessing this website.</body>
+    </html>
+    """
+    client = StaticHTTPClient(
+        {
+            "https://barbearia.example": {
+                "status_code": 403,
+                "url": "https://barbearia.example/",
+                "history": [],
+                "text": html,
+            }
+        }
+    )
+
+    analyzed = asyncio.run(analyze_lead_site(lead, client=client, timeout=3.0))
+
+    assert analyzed.website_analysis is not None
+    assert analyzed.website_analysis.reachable is None
+    assert "Browser/bot-protection challenge detected" in analyzed.website_analysis.notes
+    assert analyzed.scores.priority == "ignore"
+    assert analyzed.scores.opportunity_score == 0
+    assert "Website is unreachable" not in analyzed.scores.reasons
+
+
 def test_run_site_analysis_skips_leads_without_websites():
     without_website = CompanyLead(
         id="osm:node:3",

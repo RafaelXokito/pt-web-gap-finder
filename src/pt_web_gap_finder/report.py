@@ -12,6 +12,8 @@ def classify_gap(lead: CompanyLead) -> str:
     analysis = lead.website_analysis
     if lead.online_presence.website_found is False:
         return "No website found"
+    if analysis and "Browser/bot-protection challenge detected" in analysis.notes:
+        return "Manual verification required"
     if analysis and analysis.reachable is False:
         return "Broken or unreachable website"
     if analysis and (
@@ -37,6 +39,8 @@ def pitch_angle_for_gap(gap_type: str) -> str:
         return "Modernize the existing site for mobile, SEO snippets, HTTPS, and conversion contacts"
     if gap_type == "Social-only presence":
         return "Own the customer journey beyond social platforms with a lightweight official site"
+    if gap_type == "Manual verification required":
+        return "Manually review the site before outreach; automated checks hit browser protection"
     return "Monitor or enrich with more evidence before outreach"
 
 

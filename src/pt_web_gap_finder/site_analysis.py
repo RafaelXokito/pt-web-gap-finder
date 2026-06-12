@@ -117,6 +117,23 @@ def extract_homepage_signals(html: str) -> tuple[str | None, bool, bool, list[st
     )
 
 
+BROWSER_CHALLENGE_NOTE = "Browser/bot-protection challenge detected"
+BROWSER_CHALLENGE_MARKERS = (
+    "checking your browser",
+    "just a moment",
+    "cloudflare",
+    "cf-browser-verification",
+    "enable javascript and cookies",
+)
+
+
+def is_browser_challenge(status_code: int, title: str | None, html: str) -> bool:
+    if status_code not in {401, 403, 429, 503}:
+        return False
+    haystack = f"{title or ''}\n{html[:2000]}".lower()
+    return any(marker in haystack for marker in BROWSER_CHALLENGE_MARKERS)
+
+
 async def analyze_lead_site(
     lead: CompanyLead,
     *,
@@ -152,7 +169,8 @@ async def analyze_lead_site(
         return lead
 
     title, has_meta, has_viewport, contact_signals = extract_homepage_signals(fetched.text)
-    reachable = 200 <= fetched.status_code < 400
+    browser_challenge = is_browser_challenge(fetched.status_code, title, fetched.text)
+    reachable = None if browser_challenge else 200 <= fetched.status_code < 400
     lead.website_analysis = WebsiteAnalysis(
         http_status=fetched.status_code,
         final_url=fetched.url,
@@ -160,9 +178,10 @@ async def analyze_lead_site(
         reachable=reachable,
         redirect_chain=fetched.history,
         title=title,
-        meta_description_present=has_meta,
-        mobile_viewport_present=has_viewport,
-        contact_signals=contact_signals,
+        meta_description_present=None if browser_challenge else has_meta,
+        mobile_viewport_present=None if browser_challenge else has_viewport,
+        contact_signals=[] if browser_challenge else contact_signals,
+        notes=[BROWSER_CHALLENGE_NOTE] if browser_challenge else [],
     )
     lead.evidence.extend(
         [

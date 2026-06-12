@@ -61,6 +61,23 @@ def test_classify_gap_names_core_sales_opportunities():
         )
         == "Weak website"
     )
+    assert (
+        classify_gap(
+            lead(
+                "Browser Check",
+                0,
+                "ignore",
+                website_found=True,
+                website_url="https://browser-check.example",
+                analysis=WebsiteAnalysis(
+                    http_status=403,
+                    reachable=None,
+                    notes=["Browser/bot-protection challenge detected"],
+                ),
+            )
+        )
+        == "Manual verification required"
+    )
 
 
 def test_render_markdown_report_sorts_top_opportunities_and_includes_pitch_angles():
