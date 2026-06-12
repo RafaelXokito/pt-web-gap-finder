@@ -28,6 +28,13 @@ python -m pip install -e '.[dev]'
 
 If your system Python is externally managed, keep using the virtualenv commands above rather than installing into the system environment.
 
+If pip reports a cache/download decoding error, retry without the local package cache:
+
+```bash
+python -m pip cache purge
+PIP_NO_CACHE_DIR=1 python -m pip install -e '.[dev]'
+```
+
 ### 2. Run a complete campaign
 
 Use `run` for the full one-command workflow:
